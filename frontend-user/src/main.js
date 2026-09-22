@@ -7,6 +7,9 @@ import { Logger } from './utils/logger.js';
 // 初始化日志
 const logger = new Logger('Main');
 
+// 应用版本（构建时由 vite define 注入，用于校验缓存标识随版本更新）
+const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+
 // 应用初始化
 class App {
   constructor() {
@@ -22,7 +25,7 @@ class App {
   }
 
   async init() {
-    logger.info('应用初始化开始');
+    logger.info('应用初始化开始', { version: appVersion });
 
     try {
       // 初始化 AudioContext

@@ -101,11 +101,18 @@ docker-compose down
 │   │   ├── styles/         # 样式文件
 │   │   │   └── main.css    # 主样式
 │   │   └── main.js         # 入口文件
+│   ├── deploy/             # 发布配置（唯一数据源）
+│   │   ├── release.config.mjs        # 缓存/压缩/安全头/SPA 回退配置
+│   │   ├── render-nginx-conf.mjs     # 生成容器 nginx.conf
+│   │   └── vite-release-plugin.mjs   # 本地服务应用同一套配置
+│   ├── scripts/
+│   │   └── verify-release.mjs        # 发布前分环节校验
 │   ├── index.html          # HTML 模板
-│   ├── Dockerfile          # Docker 构建文件
-│   ├── nginx.conf          # Nginx 配置
+│   ├── Dockerfile          # Docker 构建文件（构建期生成 nginx.conf）
 │   ├── package.json        # 项目配置
 │   └── vite.config.js      # Vite 配置
+├── .github/workflows/
+│   └── release.yml         # 发布流水线（校验 → 镜像构建 → 冒烟）
 ├── docker-compose.yml      # Docker Compose 配置
 ├── .gitignore              # Git 忽略文件
 └── README.md               # 项目说明
@@ -120,6 +127,53 @@ npm run dev
 ```
 
 访问 http://localhost:8081
+
+## 发布配置与发布流水线
+
+发布相关的配置（静态资源缓存、压缩、安全响应头、SPA 路由回退）已独立为
+**唯一数据源** `frontend-user/deploy/release.config.mjs`，本地与容器共用：
+
+| 消费方 | 方式 |
+|--------|------|
+| 本地 `npm run preview` | `deploy/vite-release-plugin.mjs` 将配置应用到 Vite 服务 |
+| 容器 nginx | 镜像构建期由 `deploy/render-nginx-conf.mjs` 生成 `nginx.conf`（生成物，勿手改、不入库） |
+| 发布前校验 | `scripts/verify-release.mjs` 按同一配置逐项断言 |
+
+修改发布行为只需改 `release.config.mjs`，三处同时生效。
+
+### 发布前校验
+
+```bash
+cd frontend-user
+npm run verify:release        # 可用 APP_VERSION=x.y.z 指定版本号
+```
+
+依次执行以下环节，任一失败即以非零码退出并标明具体环节：
+
+1. **build** — 构建产物（vite build）
+2. **artifacts** — 产物完整性：index.html、版本标识、资源引用与内容哈希
+3. **nginx-conf** — 容器 nginx 配置可由共享配置正确生成
+4. **serve** — 启动本地发布服务（与容器同一套发布配置）
+5. **page** — 页面可加载、安全响应头、HTML 不缓存、gzip
+6. **assets** — 样式/脚本可加载、内容与产物一致、长缓存、gzip
+7. **spa-fallback** — 单页路由回退到 index.html
+8. **cache-busting** — 版本更新后资源哈希（缓存标识）随之变化
+
+### CI 流水线
+
+`.github/workflows/release.yml`（push 到 main 或 PR 时触发）：
+
+```
+npm ci → npm run verify:release → docker build → 容器冒烟测试
+```
+
+本地执行等价于：
+
+```bash
+cd frontend-user
+npm ci && npm run verify:release
+cd .. && docker-compose up --build -d
+```
 
 ## 频率区域说明
 

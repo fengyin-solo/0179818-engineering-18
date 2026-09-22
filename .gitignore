@@ -9,6 +9,9 @@ build/
 .next/
 out/
 
+# 由 deploy/render-nginx-conf.mjs 生成的发布配置
+frontend-user/nginx.conf
+
 # 环境变量
 .env
 .env.local

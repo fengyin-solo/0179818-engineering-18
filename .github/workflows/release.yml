@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-user
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend-user/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+
+      # 可重复校验：构建 → 产物 → nginx 配置 → 页面/资源/回退 → 缓存版本，
+      # 失败时该步骤输出会标明具体环节（build/artifacts/nginx-conf/serve/
+      # page/assets/spa-fallback/cache-busting）
+      - name: 发布前校验
+        run: npm run verify:release
+
+      - name: 构建容器镜像
+        run: docker build -t guqin-audio-analyzer:ci .
+
+      - name: 容器冒烟测试
+        run: |
+          docker run -d --name app -p 8081:8081 guqin-audio-analyzer:ci
+          ok=""
+          for i in $(seq 1 10); do
+            if curl -sf http://localhost:8081/ -o /tmp/index.html; then ok=1; break; fi
+            sleep 1
+          done
+          test -n "$ok" || { echo "容器内页面不可访问"; docker logs app; exit 1; }
+          grep -q 'id="app"' /tmp/index.html
+          curl -sI http://localhost:8081/ | grep -qi 'x-content-type-options: nosniff'
+          docker rm -f app

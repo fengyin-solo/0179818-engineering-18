@@ -1,0 +1,5 @@
+node_modules
+dist
+# nginx.conf 由 deploy/render-nginx-conf.mjs 在镜像构建期生成
+nginx.conf
+.git

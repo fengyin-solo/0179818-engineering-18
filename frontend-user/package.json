@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "release:nginx": "node deploy/render-nginx-conf.mjs",
+    "verify:release": "node scripts/verify-release.mjs",
+    "release": "npm run verify:release"
   },
   "dependencies": {
     "chart.js": "^4.4.1",
