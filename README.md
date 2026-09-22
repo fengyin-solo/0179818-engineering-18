@@ -2,9 +2,9 @@
 
 1. 确保已安装 Docker 和 Docker Compose
 
-2. 在项目根目录执行：
+2. 在项目根目录执行（可注入构建版本号）：
 ```bash
-docker-compose up --build -d
+BUILD_ID=1.0.0-$(git rev-parse --short HEAD) docker-compose up --build -d
 ```
 
 3. 访问应用：
@@ -14,6 +14,48 @@ docker-compose up --build -d
 ```bash
 docker-compose down
 ```
+
+## 发布配置（本地与容器共用一套）
+
+缓存、压缩、安全响应头、SPA 路由回退的唯一配置来源是
+`frontend-user/deploy/serve.config.js`，本地 Vite（dev / preview）与容器内 Nginx 行为一致：
+
+- `deploy/nginx.conf` 由配置生成（**不要手改**）：`cd frontend-user && npm run generate:nginx`
+- `deploy/vite-shared-serve.mjs` 是 Vite 插件，让 `npm run dev` / `npm run preview`
+  使用同样的 gzip、安全头与缓存规则
+- 版本号 `X-App-Version`：本地为 `<package版本>-<git短SHA>`，本地可显式设置 `BUILD_ID`；
+  镜像构建时由 Dockerfile 的 `--build-arg BUILD_ID=...` 注入
+
+缓存策略：
+
+| 资源 | 策略 |
+|------|------|
+| `index.html`（及 SPA 回退） | `no-cache`，新版本发布后立即生效 |
+| `/assets/*`（Vite 指纹资源） | 1 年 `immutable`，内容变化即换文件名 |
+| `public/` 静态资源（音频等） | 1 天，需重新验证 |
+
+### 发布前校验（可重复）
+
+```bash
+cd frontend-user
+npm run release:check
+```
+
+分三个阶段，失败时会标明具体环节：
+
+1. **config-drift** — 检查 `nginx.conf` 与 `serve.config.js` 是否一致
+2. **build-twice** — 用两个版本号各构建一次，验证指纹资源随版本换名、
+   `index.html` 引用齐全、同版本重复构建产物一致
+3. **serve** — 启动真实 preview 服务，逐项断言：入口页面 / 样式 / 脚本可加载、
+   gzip、安全头、三类缓存头、深层路由 SPA 回退
+
+### 发布流水线
+
+`.github/workflows/release.yml`：
+
+- 任意推送 / PR：`check:nginx` + `release:check`
+- main 分支：额外构建镜像验证 Dockerfile（不推送）
+- 推送 `v*` 标签：构建并推送镜像到 GHCR，`BUILD_ID=<tag>-<短SHA>`
 
 ## Services
 
@@ -103,7 +145,14 @@ docker-compose down
 │   │   └── main.js         # 入口文件
 │   ├── index.html          # HTML 模板
 │   ├── Dockerfile          # Docker 构建文件
-│   ├── nginx.conf          # Nginx 配置
+│   ├── deploy/             # 发布配置（本地与容器共用）
+│   │   ├── serve.config.js      # 唯一配置源：缓存/压缩/安全头/回退
+│   │   ├── generate-nginx.mjs  # 配置 -> nginx.conf 生成器
+│   │   ├── nginx.conf           # 生成的 Nginx 配置（勿手改）
+│   │   ├── vite-shared-serve.mjs # Vite 共享规则插件
+│   │   └── build-id.mjs         # 版本号解析
+│   ├── scripts/
+│   │   └── release-check.mjs    # 发布前可重复校验
 │   ├── package.json        # 项目配置
 │   └── vite.config.js      # Vite 配置
 ├── docker-compose.yml      # Docker Compose 配置

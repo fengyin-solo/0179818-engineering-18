@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "description": "古琴音频分析软件 - 用于分析音频的基频、倍频和声强变化",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:nginx": "node deploy/generate-nginx.mjs",
+    "check:nginx": "node deploy/generate-nginx.mjs --check",
+    "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
     "chart.js": "^4.4.1",

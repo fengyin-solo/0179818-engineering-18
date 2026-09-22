@@ -7,6 +7,9 @@ import { Logger } from './utils/logger.js';
 // 初始化日志
 const logger = new Logger('Main');
 
+// 构建版本号（vite define 注入，随版本变化，也会改变 bundle 指纹）
+logger.info('应用版本', __APP_BUILD_ID__);
+
 // 应用初始化
 class App {
   constructor() {

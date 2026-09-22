@@ -6,6 +6,10 @@ services:
       platforms:
         - linux/amd64
         - linux/arm64
+      args:
+        # 默认用 package 版本 + 日期，保证每次 build 的 X-App-Version 可区分；
+        # CI 发布时会显式传入 BUILD_ID=<version>-<git-sha>
+        BUILD_ID: ${BUILD_ID:-local-dev}
     container_name: guqin-audio-analyzer
     ports:
       - "8081:8081"
